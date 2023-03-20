@@ -1,0 +1,12 @@
+
+1.	get_legs(lane): Using the lanes, it gets the legs, and translates the stops using translate(stops). It returns a list of legs, and a list of excluded stops.
+2.	fact_table is initially a table consisting of lane related info including cost, key, etc.
+3.	manifest_table is a table consisting of manifest related info like lane, legs, publishedDate, etc.
+4.	get_zips(legs): Using the legs, and the unique_stops table, it returns a list of from;to zips and a list of failed zips.
+5.	get_distance(zips): Using the zips, and the distance_table, it returns a list of distances and a list of failures.
+6.	leg_cost(row): Using the data in each row of the fact_table, it returns a list of costs (a cost for each leg) for each row. 
+7.	revise_fromto(row): Using the data in each row of the manifest_table, using find_start_stop for finding shortest index path, and using the distances in the fact_table, it revises the from_to to better reflect what really happened. For example, if the from_to is A-C, and the lane is A-B-C, the revised from_to would be “A-B, B-C.”
+8.	err_revised is a table of failed revise_fromto made by finding the revise_fromto lists with len==0.
+9.	get_manifests(row): Using the data in each row of the fact_table, by linking the key with manifest_table’s and finding the ‘revised from_to,’ it returns a list of lists of manifests that ran on each leg, empty legs have [0] instead of an empty list.
+10.	The fact_table, manifest_table, and df_poms are then joined using the manifest numbers to form one final fact_table.
+11.	The fact_table along with any non-empty error tables are written to csv.
