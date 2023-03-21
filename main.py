@@ -5,6 +5,7 @@ Created on Fri Feb  3 13:01:46 2023
 @author: Shahmir.Tariq
 """
 
+import subprocess
 from datetime import datetime
 from glob import iglob
 import os
@@ -20,8 +21,14 @@ import allocate as al
 #paths
 MANIFEST_DETAILS_PATH = "../ManifestCSV/ManifestDetails.csv"
 DF_POMS_PATH = "../Pull Sheet Data LH Team"
-KPI_PATH = "../../KPI Reports - 2/POMS in KPI Reports"
+KPI_PATH = "../Closing Tickets"
 PRODUCT_BASE_PATH = "../Product/{0}--"
+AUTO_PULL_PATH = "get_missing_pull_sheets.py"
+AUTO_TICKETS_PATH = "get_missing_closing_tickets.py"
+
+#Get the Pull Sheet Data and the Closing Tickets first
+subprocess.Popen(["python", AUTO_PULL_PATH]).wait()
+subprocess.Popen(["python", AUTO_TICKETS_PATH]).wait()
 
 try:
     print("Getting Manifest Details...\n")

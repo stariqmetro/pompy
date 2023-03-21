@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Downloads Pull Sheet Data LH Team report for given manifests.
+Downloads Closing Tickets from Order# report for given orders.
 Expects a string of manifests seperated by a '\n'.
 """
 import os
@@ -29,7 +29,7 @@ def download_wait(directory):
                 dl_wait = True
     return
 
-def download_pull_sheet():
+def download_closing_tickets():
     #change download location
     DOWNLOAD_DIR = r'C:\Users\shahmir.tariq\Downloads\Auto'
     PASSWORD_DIR = "../Helpers/Password.txt"
@@ -61,17 +61,17 @@ def download_pull_sheet():
     
     driver.get("https://pplus.metropolitanwarehouse.com/reports.aspx")
     search_box = driver.find_element(by=By.ID, value="ContentPlaceHolder1_txtSearch")
-    search_box.send_keys("Pull Sheet Data LH Team")
+    search_box.send_keys("Closing Tickets From Order#")
     #wait until the text appears in the dropdown
     element = WebDriverWait(driver,10).until(EC.presence_of_element_located(
-      (By.XPATH, "//*[contains(text(), 'Pull Sheet Data LH Team')]"))
+      (By.XPATH, "//*[contains(text(), 'Closing Tickets From Order#')]"))
     )
     element.click()
     
-    manifest_box = driver.find_element(by=By.ID, value="ContentPlaceHolder1_gvData_txtPara_0")
-    manifest_box.clear()
-    manifest_box.send_keys(Keys.CONTROL, 'a'),
-    manifest_box.send_keys(Keys.CONTROL, 'v')
+    order_box = driver.find_element(by=By.ID, value="ContentPlaceHolder1_gvData_txtPara_0")
+    order_box.clear()
+    order_box.send_keys(Keys.CONTROL, 'a'),
+    order_box.send_keys(Keys.CONTROL, 'v')
     get_xl = driver.find_element(by=By.ID, value="ContentPlaceHolder1_btnXL")
     get_xl.click()
 

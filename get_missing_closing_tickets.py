@@ -12,31 +12,33 @@ from datetime import datetime as dt
 from pandas import read_csv, concat, read_excel, DataFrame
 from numpy import array_split
 
-import auto_pull as ap
+import auto_tickets as at
 
 DF_POMS_PATH = "../Pull Sheet Data LH Team"
-MANIFEST_DETAILS_PATH = "../ManifestCSV/ManifestDetails.csv"
+CLOSING_TICKETS_PATH = "../Closing Tickets"
 DOWNLOAD_DIR = r'C:\Users\shahmir.tariq\Downloads\Auto'
 #%%
 print("\nGetting the POMs...")
 all_files = iglob(os.path.join(DF_POMS_PATH, "*.csv"))
-df_poms = concat((read_csv(f, encoding='ISO-8859-1', engine='c', usecols=['Manifest No']
+df_poms = concat((read_csv(f, encoding='ISO-8859-1', engine='c', usecols=['OrderNo']
                     ) for f in all_files), ignore_index=True)
 
-print("\nGetting Manifest Details...")
-fact_table = read_csv(MANIFEST_DETAILS_PATH)
-print(fact_table.head())
+print("\nGetting Closing Tickets...")
+all_files = iglob(os.path.join(CLOSING_TICKETS_PATH, "*.csv"))
+closing_tickets = concat((read_csv(f, encoding='ISO-8859-1', engine='c', usecols=['Order #']
+                    ) for f in all_files), ignore_index=True)
+print(closing_tickets.head())
 
-missing_nums = fact_table.loc[~fact_table['manifest_num'].isin(df_poms['Manifest No']),
-                              'manifest_num']
+missing_nums = df_poms.loc[~df_poms['OrderNo'].isin(closing_tickets['Order #']),
+                              'OrderNo']
 print(missing_nums.shape)
-missing_chunks = array_split(missing_nums.to_numpy(), 1+len(missing_nums)//300)
+missing_chunks = array_split(missing_nums.to_numpy(), 1+len(missing_nums)//10000)
 #%%
 for num, chunk in enumerate(missing_chunks):
     print(f"Getting chunk no. {num+1} of {len(missing_chunks)}...")
     #str_chunk = '\n'.join(map(str, chunk))
     DataFrame(chunk).to_clipboard(header=None, index=False)
-    ap.download_pull_sheet()
+    at.download_closing_tickets()
     if (num+1) != len(missing_chunks):
         print("Moving on to next chunk...")
     else:
@@ -44,11 +46,11 @@ for num, chunk in enumerate(missing_chunks):
 #%%
 print("\nMoving from the Auto folder and possibly converting to csv...")
 all_files = iglob(os.path.join(DOWNLOAD_DIR, "*.xlsx"))
-df_poms = concat((read_excel(f) for f in all_files), ignore_index=True)
-if len(df_poms.index) == 0:
+df_closing = concat((read_excel(f) for f in all_files), ignore_index=True)
+if len(df_closing.index) == 0:
     print("df is empty, not converting...")
 else:
-    df_poms.to_csv(DF_POMS_PATH + "/" + "Pull Sheet Data--" +
+    df_closing.to_csv(CLOSING_TICKETS_PATH + "/" + "Closing-Tickets-from-Order#--" +
                    dt.now().strftime("%y-%h-%d--%H-%M") + ".csv",
                    index=False)
 
