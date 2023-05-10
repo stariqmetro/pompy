@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Mar 13 09:49:50 2023
-
-@author: Shahmir.Tariq
-"""
 
 def leg_cost(row):
     list_legs = row["leg"]

@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Mar 13 08:44:13 2023
-
-@author: Shahmir.Tariq
-"""
-
 import pandas as pd
 
 print("\nGetting Translation Table...\n")
@@ -12,11 +5,8 @@ unique_stops = pd.read_csv("../Helpers/StopsTranslation.csv", dtype=str)
 print(unique_stops.head())
 
 print("\nGetting Distance Table...\n")
-distance_table = pd.read_csv("../Helpers/ZipDistances.csv", dtype={'Zip_Code1': str, 'Zip_Code2': str})
+distance_table = pd.read_csv("../Helpers/ZipDistances.csv", dtype={'Zip': str})
 print(distance_table.head())
-
-# join the two zips in the distance_table to get ['Zip']
-distance_table['Zip'] = distance_table['Zip_Code1'] + distance_table['Zip_Code2']
 
 def translate(stops):
     translated_stops = []

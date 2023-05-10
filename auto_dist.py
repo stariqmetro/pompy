@@ -24,10 +24,11 @@ def download_wait(directory):
                 dl_wait = True
     return
 
-def download_closing_tickets():
+def download_dist():
     #change download location
     DOWNLOAD_DIR = r"C:\OneDrive - Metropolitan Warehouse\Vendor Control\Data Files\POM Level\Downloads\Auto"
     PASSWORD_DIR = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Helpers/Password.txt"
+    DIST_DIR = r'C:\OneDrive - Metropolitan Warehouse\Vendor Control\Data Files\POM Level\TMSProduct\temp_dist.csv'
 
     with open(PASSWORD_DIR) as password_file:
         username = password_file.readline().strip('\n')
@@ -54,21 +55,18 @@ def download_closing_tickets():
     title = driver.title
     assert title == "PinnaclePlus"
     
-    driver.get("https://pplus.metropolitanwarehouse.com/reports.aspx")
-    search_box = driver.find_element(by=By.ID, value="ContentPlaceHolder1_txtSearch")
-    search_box.send_keys("Closing Tickets From Order#")
-    #wait until the text appears in the dropdown
-    element = WebDriverWait(driver,10).until(EC.presence_of_element_located(
-      (By.XPATH, "//*[contains(text(), 'Closing Tickets From Order#')]"))
-    )
-    element.click()
+    driver.get("https://pplus.metropolitanwarehouse.com/zip_distance.aspx")
+    choose_file = driver.find_element(by=By.XPATH,
+                                      value='//*[@id="ContentPlaceHolder1_FileUpload1"]')
+    choose_file.send_keys(DIST_DIR)
+
+    two_columns = driver.find_element(by=By.XPATH,
+                                      value='//*[@id="ContentPlaceHolder1_rbTwo"]')
+    two_columns.click()
     
-    order_box = driver.find_element(by=By.ID, value="ContentPlaceHolder1_gvData_txtPara_0")
-    order_box.clear()
-    order_box.send_keys(Keys.CONTROL, 'a'),
-    order_box.send_keys(Keys.CONTROL, 'v')
-    get_xl = driver.find_element(by=By.ID, value="ContentPlaceHolder1_btnXL")
-    get_xl.click()
+    get_btn = driver.find_element(by=By.XPATH,
+                                  value='//*[@id="ContentPlaceHolder1_Button1"]')
+    get_btn.click()
 
     #wait for download to finish
     download_wait(DOWNLOAD_DIR)

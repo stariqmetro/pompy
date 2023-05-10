@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Downloads Pull Sheet Data LH Team report for given manifests.
-Expects a string of manifests seperated by a '\n'.
-"""
 import os
 import time
 from selenium import webdriver
@@ -31,8 +26,8 @@ def download_wait(directory):
 
 def download_pull_sheet():
     #change download location
-    DOWNLOAD_DIR = r'C:\Users\shahmir.tariq\Downloads\Auto'
-    PASSWORD_DIR = "../Helpers/Password.txt"
+    DOWNLOAD_DIR = r"C:\OneDrive - Metropolitan Warehouse\Vendor Control\Data Files\POM Level\Downloads\Auto"
+    PASSWORD_DIR = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Helpers/Password.txt"
 
     with open(PASSWORD_DIR) as password_file:
         username = password_file.readline().strip('\n')

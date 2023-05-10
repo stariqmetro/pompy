@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Feb  3 13:01:46 2023
-
-@author: Shahmir.Tariq
-"""
-
 import subprocess
 from datetime import datetime
 from glob import iglob
@@ -19,15 +12,15 @@ import process_lane as pl
 import allocate as al
 
 #paths
-MANIFEST_DETAILS_PATH = "../ManifestCSV/ManifestDetails.csv"
-DF_POMS_PATH = "../Pull Sheet Data LH Team"
-KPI_PATH = "../Closing Tickets"
-PRODUCT_BASE_PATH = "../Product/{0}--"
-AUTO_PULL_PATH = "get_missing_pull_sheets.py"
-AUTO_TICKETS_PATH = "get_missing_closing_tickets.py"
+MANIFEST_DETAILS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/ManifestCSV/ManifestDetails.csv"
+DF_POMS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Pull Sheet Data LH Team"
+KPI_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Closing Tickets"
+PRODUCT_BASE_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Product/{0}--"
+AUTO_PULL_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/pompy/get_missing_pull_sheets.py"
+AUTO_TICKETS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/pompy/get_missing_closing_tickets.py"
 
 #Get the Pull Sheet Data and the Closing Tickets first
-subprocess.Popen(["python", AUTO_PULL_PATH]).wait()
+subprocess.Popen(["python", AUTO_PULL_PATH, MANIFEST_DETAILS_PATH]).wait()
 subprocess.Popen(["python", AUTO_TICKETS_PATH]).wait()
 
 try:
@@ -123,6 +116,11 @@ def revise_fromto(row):
     dist_list = [] # list of distances of legs1
     dist_list2 = [] # list of distances of legs2
     special_cases = ["CA-EV", "NC-SD", "OH-DY"]
+    
+    #if any from_to is in special cases and has first equal to second, let it be
+    if all((from_to[0] == from_to[1], len([x for x in from_to if x in special_cases])>0)):
+        revised = from_to
+    
     try:
         dist_list = fact_table.loc[fact_table['leg'].apply(lambda x: x==legs1), "Leg Distance"].iloc[0]
         dist_list2 = fact_table.loc[fact_table['leg'].apply(lambda x: x==legs2), "Leg Distance"].iloc[0]
@@ -146,9 +144,10 @@ def revise_fromto(row):
         return result[0], result[1]
 
     try:
-        # only revise the from_to if none of the following three hold true
+        # only revise the from_to if all of the following four conditions hold true
         if all((row["from_to"] not in legs1,
                 row["from_to"] not in legs2,
+                len(revised) == 0,
                 total_dist != 0)):
 
             if any((origin not in (stops_legs1 + stops_legs2),
