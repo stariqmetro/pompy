@@ -16,19 +16,21 @@ print("\nGetting the POMs...")
 all_files = iglob(os.path.join(DF_POMS_PATH, "*.csv"))
 df_poms = concat((read_csv(f, encoding='ISO-8859-1', engine='c', usecols=['Manifest No']
                            ) for f in all_files), ignore_index=True)
+#print(df_poms['Manifest No'].tail())
 
 print("\nGetting Manifest Details...")
 all_files = iglob(os.path.join(MANIFEST_DETAILS_PATH, "*.csv"))
 try:
-    fact_table = concat((read_csv(f, columns=['manifest_num']) for f in all_files), ignore_index=True)
+    fact_table = concat((read_csv(f, usecols=['manifest_num']) for f in all_files), ignore_index=True)
 except:
     fact_table = DataFrame({'manifest_num': []})
 
-fact_table['manifest_num'] = fact_table['manifest_num'].fillna(0).astype(int)
+fact_table['manifest_num'] = fact_table['manifest_num'].fillna(0).astype('int64')
+#print(fact_table['manifest_num'].tail())
 missing_nums = fact_table.loc[(~fact_table['manifest_num'].isin(df_poms['Manifest No'])) &
-                              fact_table["manifest_num"] != 0,'manifest_num'].drop_duplicates()
+                              (fact_table["manifest_num"] != 0),'manifest_num'].drop_duplicates()
 print(missing_nums.shape)
-print(missing_nums.head())
+#print(missing_nums.head())
 
 if len(missing_nums.index) == 0:
     print("\nNo missing nums found. Exiting...\n")

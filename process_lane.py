@@ -15,19 +15,25 @@ def translate(stops):
     
     # iterate over each stop
     for stop in stops:
-        try:
-            translated = unique_stops.loc[unique_stops['Stop'] == stop.strip(), 'Translated']
-            is_standard = unique_stops.loc[unique_stops['Stop'] == stop.strip(), 'Bool']
-            # try to get the translated stop against the current stop from the unique_stops table
-            if len(translated) > 0:
-                translated_stop = translated.iloc[0]
-                translated_stops.append(translated_stop)
-                is_standard_stop = is_standard.iloc[0]
-                is_standard_list.append(is_standard_stop)
-            elif (stop != "nan") and (stop not in excluded_stops):
-                excluded_stops.append(stop)
-        except Exception as e:
-            print("Error translating...", e)
+        if stop == "nan":
+            translated_stop = "nan"
+            translated_stops.append(translated_stop)
+            is_standard_stop = "0"
+            is_standard_list.append(is_standard_stop)
+        else:
+            try:
+                translated = unique_stops.loc[unique_stops['Stop'] == stop.strip(), 'Translated']
+                is_standard = unique_stops.loc[unique_stops['Stop'] == stop.strip(), 'Bool']
+                # try to get the translated stop against the current stop from the unique_stops table
+                if len(translated) > 0:
+                    translated_stop = translated.iloc[0]
+                    translated_stops.append(translated_stop)
+                    is_standard_stop = is_standard.iloc[0]
+                    is_standard_list.append(is_standard_stop)
+                elif stop not in excluded_stops:
+                    excluded_stops.append(stop)
+            except Exception as e:
+                print("Error translating...", e)
     
     return translated_stops, is_standard_list, excluded_stops
 
@@ -35,6 +41,7 @@ def get_legs(lane):
     
     #split the lane into its stops using the "-" link
     stops = str(lane).split("-")
+    leg = "nan"
     
     # translate the stops first...
     translated_stops, is_standard_list, excluded_stops = translate(stops)
@@ -64,15 +71,13 @@ def get_legs(lane):
         combined_list.append(leg)
     # ...then combine the stops back into legs
     
-    if translated_stops in ['LOCAL MOVEMENT']:
+    if len(set(['LOCAL MOVEMENT', 'nan']).intersection(set(translated_stops))) > 0:
         combined_list = translated_stops
     
     if len(bool_list) == 0:
         bool_list = ['0']
-        
-    leg_counts = [combined_list.count(x) for x in combined_list]
     
-    return combined_list, leg_counts, bool_list, excluded_stops
+    return combined_list, bool_list, excluded_stops
 
 def get_zips(legs):
 
@@ -118,14 +123,14 @@ def get_distance(zips):
     
     for leg_ in list_zips:
         
-        leg = leg_.replace(";", "")
+        #leg = leg_.replace(";", "")
         
         try:
             # both Zip and leg should be strings
-            dist = distance_table.loc[distance_table['Zip'] == leg, 'Distance'].iloc[0]
+            dist = distance_table.loc[distance_table['Zip'] == leg_, 'Distance'].iloc[0]
             list_dist.append(dist)
         except:
-            if(len(leg) != 0):
+            if(len(leg_) != 0):
                 dist = 0
                 list_dist.append(dist)
                 if 'nan' not in leg_ and leg_ not in special_cases:

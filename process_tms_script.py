@@ -1,44 +1,102 @@
-# %% [markdown]
-# Import the necessary libraries, keeping the python standard ones above the non-standard.
-
 # %%
+
+#exit(0)
+# Import the necessary libraries, keeping the python standard ones above the non-standard.
 from glob import glob
 import os
+import re
 import subprocess
 from datetime import datetime
+from itertools import product
 
 import pandas as pd
 import numpy as np
 
-# %% [markdown]
-# Assign path variables. This way we can easily change the path later if needed.
-
 # %%
-REPORT_PATH = "//filesrv/MercuryGate/"
+# Assign path variables. This way we can easily change the path later if needed.
+REPORT_PATH = "//filesrv/MercuryGate/" #"../Others/Extracted.csv"
 PARQUET_PATH = "//filesrv/MercuryGate/Separated/Backup.parquet"
 ORDERS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Pull Sheet Data LH Team/"
-TICKETS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Closing Tickets/"
+TICKETS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/KPI Reports - 2/POMS in KPI Reports/"
+OTHER_TICKETS = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/KPI Reports - 2/linehaul_poms/"
 OUTPUT_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/TMSProduct/"
 AUTO_PULL_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/pompy/get_missing_pull_sheets.py"
-AUTO_TICKETS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/pompy/get_missing_closing_tickets.py"
+#AUTO_TICKETS_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/pompy/get_missing_closing_tickets.py"
 AUTO_DIST_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/pompy/get_missing_dist.py"
-
-# %% [markdown]
-# Read all reports in the report path and create a dataframe.
+ZIP_DISTANCE_PATH = "C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Helpers/ZipDistances.csv"
 
 # %%
-report_files = glob(os.path.join(REPORT_PATH, "*.csv"))
-if len(report_files) > 0:
-    df = pd.concat((pd.read_csv(f) for f in report_files), ignore_index=True)
-    df = df.drop_duplicates()
-else:
-    print("Nothing to read. Exiting...")
+# Get a list of all XLSX files in the folder
+xlsx_files = glob(os.path.join(REPORT_PATH, '*.xlsx'))
+
+# Sort the list of files by modification time (latest first)
+xlsx_files.sort(key=os.path.getmtime, reverse=True)
+
+# Get the latest two XLSX files
+latest_files = xlsx_files[:2]
+
+# Print the file names
+#for file in latest_files:
+#    print(file)
+
+# %%
+try:
+    inv_file = [x for x in latest_files if "carrier" in x][0] #invoice files
+    ship_file = [x for x in latest_files if "carrier" not in x][0] #shipment info files
+except IndexError:
+    print("No file found, exiting...")
     exit(0)
+
+# %%
+# read carrier invoices
+df_inv = pd.read_excel(inv_file)
+df_inv = df_inv.drop_duplicates()
+
+# %%
+# read shipment info
+df = pd.read_excel(ship_file)
+df = df.drop_duplicates()
+
+# %%
+
+# %%
+#df = pd.read_csv(REPORT_PATH)
+#df = df.drop_duplicates()
+
+
+# %% [markdown]
+# Get the columns in the cols list only.
+
+# %%
+cols = ['Primary Reference', 'Pinnacle Manifest No', 'Target Ship (Late)',
+        'Target Delivery (Late)', 'Actual Delivery', 'Actual Ship', 'Origin Code',
+        'Origin Zip', 'Dest Code', 'Dest Zip', 'Carrier Name', 'Carrier Total']
+df = df[cols]
+df.rename(columns={'Carrier Name': 'Carrier'}, inplace=True)
+
+# %%
+cutoff_date = '2023-04-01'
+selected_refs = df.groupby('Primary Reference').filter(lambda x: (x['Target Ship (Late)'] >= cutoff_date).all())['Primary Reference'].unique()
+df = df[df['Primary Reference'].isin(selected_refs)]
+
+# %%
+df_inv['Load ID'] = df_inv['Load ID'] + ' (Load ID)'
+
+# %%
+invoice_data = df_inv[['Load ID', 'Invoice Charge', 'Invoice Date', 'Invoice Number', 'Invoice Total Fuel', 'Invoice Total Line Haul']].set_index('Load ID')
+
+# %%
+df = df.set_index('Primary Reference')
+
+# %%
+df = df.join(invoice_data)
+
+# %%
+df = df.reset_index(names=['Primary Reference'])
 
 # %% [markdown]
 # Concat the old data to the newer one, replacing any data in the old with the new one.<br>
 # Archive it in a parquet file.
-
 # %%
 if os.path.exists(PARQUET_PATH):
         pqt_df = pd.read_parquet(PARQUET_PATH)
@@ -49,23 +107,13 @@ else:
         df.astype(str).to_parquet(PARQUET_PATH, index=False)
 
 # %% [markdown]
-# Get the columns in the cols list only.
-
-# %%
-cols = ['Primary Reference', 'Pinnacle Manifest No', 'Target Ship (Late)',
-        'Arrival Date', 'Target Delivery (Late)', 'Actual Delivery', 'Origin Code',
-        'Origin Zip', 'Dest Code', 'Dest Zip', 'Carrier', 'Carrier Total',
-        'Invoice Charge', 'Invoice Date', 'Invoice Number', 'Invoice Total Line Haul',
-        'Invoice Total Fuel']
-df = df[cols]
-
-# %% [markdown]
 # Before we can use the Carrier Total, we need to replace it with the Invoice Charge.<br>
 # Before we can use Invoice Charge, we need to aggregate it over the load.<br>
 # Before we can aggregate it over the load, we need to divide it over multiple loads if its loads > 1.<br>
 
 # %%
 #divide the invoices equally over their loads, no effect if only 1 load
+df['Invoice Number'] = df['Invoice Number'].fillna('')
 number_of_loads_against_invoice = df.groupby('Invoice Number')['Primary Reference'].transform('nunique')
 df['Invoice Charge'] = df['Invoice Charge'] / number_of_loads_against_invoice
 df['Invoice Total Line Haul'] = df['Invoice Total Line Haul'] / number_of_loads_against_invoice
@@ -129,6 +177,8 @@ df["OriginCode;Zip"] = df["Origin Code"].astype('str') + ";" + df["Origin Zip"].
 df["Target Ship (Late)"] = pd.to_datetime(df["Target Ship (Late)"])
 df["Target Delivery (Late)"] = pd.to_datetime(df["Target Delivery (Late)"])
 df["Invoice Date"] = pd.to_datetime(df["Invoice Date"])
+df["Actual Delivery"] = pd.to_datetime(df['Actual Delivery'], errors='coerce')
+df['Actual Ship'] = pd.to_datetime(df['Actual Ship'], errors='coerce')
 
 # %% [markdown]
 # ### create_lane(load):
@@ -242,7 +292,7 @@ tempdf.to_csv(OUTPUT_PATH + "temp.csv", index=False)
 
 # %%
 subprocess.run(["python", AUTO_PULL_PATH, OUTPUT_PATH], stdout=subprocess.PIPE)
-subprocess.run(["python", AUTO_TICKETS_PATH], stdout=subprocess.PIPE)
+#subprocess.run(["python", AUTO_TICKETS_PATH], stdout=subprocess.PIPE)
 
 # %% [markdown]
 # Remove the temporary csv.
@@ -259,9 +309,26 @@ os.remove(OUTPUT_PATH + "temp.csv")
 # %%
 def get_leg(list_stops, delim):
     list_legs = []
+    if len(list_stops) == 1:
+        list_stops.append(list_stops[0])
     for i in range(len(list_stops)-1):
         list_legs.append(list_stops[i] + delim + list_stops[i+1])
     return list_legs
+
+# %%
+def find_start_stop(start, stop):
+        cross_join = product(start, stop) # cross join the two lists
+        path = 99 # default value of path from one index to another (not miles)
+        result = () # default value
+
+        for join in cross_join:
+            diff = join[1] - join[0]
+            # if the current different between two indices is less than path, update path
+            if 0 < diff < path:
+                path = diff
+                result = join
+
+        return result[0], result[1]
 
 # %% [markdown]
 # ### revise_from_to(lane, zip_lane, from_to, from_to_zip, load):
@@ -281,26 +348,27 @@ def get_leg(list_stops, delim):
 
 # %%
 def revise_from_to(lane, zip_lane, from_to, from_to_zip, load):
-    err = []
+    #err = []
     revised = [from_to]
     revised_zips = [from_to_zip]
     if from_to not in lane:
-        origin, destination = from_to.split(" | ")
         stops = lane.split(" | ")
         zips = zip_lane.split(";")
         try:
-            origin_index = stops.index(origin)
-            destination_index = origin_index + stops[origin_index:].index(destination) + 1
-            revised_stops = stops[origin_index:destination_index]
-            revised_zips_list = zips[origin_index:destination_index]
+            origin, destination = from_to.split(" | ")
+            origin_indices = [i for i, x in enumerate(stops) if x == origin]
+            dest_indices = [i for i, x in enumerate(stops) if x == destination]
+            start, stop = find_start_stop(origin_indices, dest_indices)
+            revised_stops = stops[start:stop+1]
+            revised_zips_list = zips[start:stop+1]
             revised = get_leg(revised_stops, " | ")
             revised_zips = get_leg(revised_zips_list, ";")
-        except ValueError:
-            err.append(load)
-    return revised, revised_zips, err
+        except (IndexError, ValueError):
+            pass
+    return revised, revised_zips#, err
 
-err_df = pd.DataFrame()
-df['revised_from_to'], df['revised_zips'], err_df['Load'] = zip(*df.apply(lambda x: revise_from_to(
+#err_df = pd.DataFrame()
+df['revised_from_to'], df['revised_zips'] = zip(*df.apply(lambda x: revise_from_to(
     x['lane'], x['zips'], x['from_to'], x['from_to_zip'], x['Primary Reference']), axis=1))
 
 # %% [markdown]
@@ -310,25 +378,43 @@ df['revised_from_to'], df['revised_zips'], err_df['Load'] = zip(*df.apply(lambda
 df = df.explode(['revised_from_to', 'revised_zips'])
 
 # %%
-df['count_leg'] = df.groupby(["Primary Reference", "revised_from_to"]).transform('size')
+df['revised_from_to'].fillna('', inplace=True)
+df['revised_zips'].fillna('', inplace=True)
 
 # %%
-df.loc[(df['Primary Reference']=="LD27907 (Load ID)"), "count_leg"]
+# drop duplicates
+df.drop_duplicates(subset=['Primary Reference', 'revised_from_to', 'manifest_num'], inplace=True)
 
 # %%
-distance_table = pd.read_csv("C:/OneDrive - Metropolitan Warehouse/Vendor Control/Data Files/POM Level/Helpers/ZipDistances.csv", dtype={'Zip_Code': str})
+# Function to count occurrences of search string
+def count_occurrences(group):
+    search_string = group['revised_from_to'].iloc[0] # get the leg
+    if not search_string: # if it is empty return 1
+        return 1
+    search_string_escaped = re.escape(search_string) # escape special characters
+    return group['lane'].str.count(search_string_escaped).max() # return max count per lane
+
+# Apply function to each group
+result = df.groupby(['Primary Reference', 'revised_from_to']).apply(count_occurrences)
+result.name = 'count_leg'
+df = df.merge(result, on=['Primary Reference', 'revised_from_to'], how='left')
+del result
+
+# %%
+distance_table = pd.read_csv(ZIP_DISTANCE_PATH, dtype={'Zip_Code': str})
 print(distance_table.head())
 
 # %%
 failed_dist = pd.DataFrame()
-failed_dist['dist'] = df.loc[~df['revised_zips'].isin(distance_table['Zip']), 'revised_zips']
+failed_dist['zip'] = df.loc[~df['revised_zips'].isin(distance_table['Zip']), 'revised_zips']
 failed_dist = failed_dist.drop_duplicates().dropna()
 
 # %%
 # split column into multiple columns by delimiter
 if len(failed_dist.index) > 0:
-    failed_dist[['zip1', 'zip2']] = failed_dist['dist'].str.split(';', n=1, expand=True).dropna(how='any')
-    failed_dist.drop(columns=['dist'], inplace=True)
+    failed_dist[['zip1', 'zip2']] = failed_dist['zip'].str.extract(r'([^;]*);(.*)', expand=True)
+    failed_dist.dropna(how='any', inplace=True)
+    failed_dist.drop(columns=['zip'], inplace=True)
     failed_dist.to_csv(OUTPUT_PATH+'temp_dist.csv', index=False)
     subprocess.Popen(["python", AUTO_DIST_PATH]).wait()
     os.remove(OUTPUT_PATH + "temp_dist.csv")
@@ -348,20 +434,22 @@ exfailed_dist = pd.DataFrame()
 df["zip_distance"], exfailed_dist['exdist'] = zip(*df['revised_zips'].apply(get_distance))
 
 # %%
+df['count_leg'] = df['count_leg'].clip(lower=1)
+
 # calculate adjusted distance for each row
 df['Adjusted Distance'] = df['zip_distance'] * df['count_leg']
 
-# drop duplicates
-df.drop_duplicates(['Primary Reference', 'revised_from_to'], inplace=True)
-
 # group by Primary Reference and transform the sum of adjusted distance
-df['Load Total Distance'] = df.groupby(['Primary Reference'])['Adjusted Distance'].transform('sum')
+load_distance = df.drop_duplicates(['Primary Reference', 'revised_from_to']).groupby(['Primary Reference'])[
+    'Adjusted Distance'].sum().reset_index(name='Load Total Distance')
+
+df = pd.merge(df, load_distance, on=['Primary Reference'])
 
 # reset index
 df.reset_index(drop=True, inplace=True)
 
 # %%
-# calculate number of manifests per leg
+# calculate number of legs per load
 legs_per_load = df.groupby(['Primary Reference']).revised_from_to.nunique().reset_index(name='Legs per Load')
 
 # merge manifests_per_leg with fact_table
@@ -385,18 +473,69 @@ df_poms = df_pomsg.set_index('OrderNo')
 
 # %%
 print("\nGetting Closing Tickets...")
-kpi_files = glob(os.path.join(TICKETS_PATH, "*.csv"))
-df_kpi = pd.concat((pd.read_csv(f, encoding='ISO-8859-1', engine='c', dtype={'Order #': object},
-                                usecols=['Order #', 'Actual Delivery Date', 'Client Name', 'Amount']
-                                ) for f in kpi_files), ignore_index=True).drop_duplicates().round(2)
-df_kpi = df_kpi.groupby('Order #').agg({'Actual Delivery Date': 'first', 'Client Name': 'first', 'Amount': 'sum'})
+# get the CSVs in the main tickets folder 
+tp_files = glob(os.path.join(TICKETS_PATH, "*.csv"))
+# create a dataframe using the CSVs
+df_tp = pd.concat(
+    (pd.read_csv(f, encoding='ISO-8859-1', engine='c', dtype={'Order #': object},
+                               usecols=[
+                                   'Order #',
+                                   'Order Status',
+                                   'Actual Delivery Date',
+                                   'First Offered Date',
+                                   'Client Name',
+                                   'PickupHub',
+                                   'DeliveryHub',
+                                   'Amount',
+                                   'Approval Value'
+                                ]
+    ) for f in tp_files), ignore_index=True).round(2)
+# get the CSVs in the other tickets folder (the linehaul_poms one)
+ot_files = glob(os.path.join(OTHER_TICKETS, "*.csv"))
+# create a dataframe using the CSVs
+df_ot = pd.concat(
+    (pd.read_csv(f, encoding='ISO-8859-1', engine='c', dtype={'Order #': object},
+                                usecols=[
+                                   'Order #',
+                                   'Order Status',
+                                   'Actual Delivery Date',
+                                   'First Offered Date',
+                                   'Client Name',
+                                   'PickupHub',
+                                   'DeliveryHub',
+                                   'Amount',
+                                   'Approval Value'
+                                ]
+    ) for f in ot_files), ignore_index=True).round(2)
+# append the two dataframes, taking only those orders from main folder which are
+#   not appearing in the linehaul_poms one
+df_kpi = pd.concat(
+    [ df_tp.loc[~df_tp["Order #"].isin(df_ot["Order #"])], df_ot ],
+    ignore_index=True
+)
+# get rid of the temp dfs made
+del df_tp
+del df_ot
+# groupby Order #
+df_kpi = df_kpi.groupby('Order #').agg(
+    {
+        'Order Status': 'last',
+        'Actual Delivery Date': 'last',
+        'First Offered Date': 'last',
+        'Client Name': 'last',
+        'PickupHub': 'last',
+        'DeliveryHub': 'last',
+        'Amount': 'sum',
+        'Approval Value': 'last'
+    }
+)
 
 # %%
 print("\nMerging df_poms and closing_tickets...")
 df_poms = df_poms.join(df_kpi)
 df_poms.index.names = ['Order #']
 df_poms.reset_index(inplace=True)
-print(df_poms.shape)
+#print(df_poms.shape)
 
 # %%
 print("\nMerging fact_table and df_poms...")
@@ -406,15 +545,13 @@ df.set_index('manifest_num', inplace=True)
 fact_table = df.join(df_poms)
 fact_table.index.names = ['manifest_num']
 fact_table.reset_index(inplace=True)
-print(fact_table.shape)
+#print(fact_table.shape)
 
 # %%
 fact_table['Order Delivery Date'] = (pd.TimedeltaIndex(fact_table['Actual Delivery Date'
                                             ], unit='d') + datetime(1899, 12, 30)).strftime('%Y-%m-%d')
 fact_table.drop(columns=['Actual Delivery Date'], inplace=True)
 
-# %%
-fact_table.tail()
 
 # %%
 fact_table['Manifest Cubes'] = fact_table.groupby(['Primary Reference', 'revised_from_to', 'manifest_num'])['Cu_Ft_'].transform('sum')
@@ -422,8 +559,6 @@ fact_table['Manifest Cubes'] = fact_table.groupby(['Primary Reference', 'revised
 # %%
 fact_table['Leg Cubes'] = fact_table.groupby(['Primary Reference', 'revised_from_to'])['Cu_Ft_'].transform('sum')
 
-# %%
-fact_table.columns
 
 # %%
 # calculate number of manifests per leg
@@ -439,13 +574,13 @@ fact_table['Manifest Cost'] = np.where(fact_table['Leg Cubes'] <= 0,
 
 
 # %%
-# calculate number of manifests per leg
+# calculate number of orders per manifest
 orders_per_manifest = fact_table.groupby(['Primary Reference', 'revised_from_to', 'manifest_num'])['Order #'].nunique().reset_index(name='Orders Per Manifest')
 
 # merge orders_per_leg with fact_table
 fact_table = pd.merge(fact_table, orders_per_manifest, on=['Primary Reference', 'revised_from_to', 'manifest_num'])
 
-# allocate leg cost to manifests
+# allocate manifest cost to poms
 fact_table['POM Cost'] = np.where(fact_table['Manifest Cubes'] <= 0,
                                   fact_table['Manifest Cost'] / fact_table['Orders Per Manifest'].clip(lower=1),
                                   fact_table['Manifest Cost'] * fact_table['Cu_Ft_'] / fact_table['Manifest Cubes'])
@@ -455,24 +590,26 @@ fact_table = fact_table.rename(columns={'revised_from_to': 'Leg', 'revised_zips'
                               'count_leg': 'Leg Instance per Load', 'Cu_Ft_': 'Order Cubes',
                               'zip_distance': 'Actual Distance'})
 
+#%%
+fact_table = fact_table.drop(
+    columns=[
+        "Code;Zip",
+        "OriginCode;Zip"
+    ]
+)
+
 # %%
 if os.path.exists(OUTPUT_PATH + "Product.csv"):
-    old_data = pd.read_csv(OUTPUT_PATH + "Product.csv")
-    references = set(fact_table["Primary Reference"])
-    old_data = old_data[~old_data["Primary Reference"].isin(references)]
-    final = pd.concat([old_data, fact_table])
+   old_data = pd.read_csv(OUTPUT_PATH + "Product.csv")
+   references = set(fact_table["Primary Reference"])
+   old_data = old_data[~old_data["Primary Reference"].isin(references)]
+   final = pd.concat([old_data, fact_table])
 else:
-    final = fact_table
+   final = fact_table
 
 # %%
 final.to_csv(OUTPUT_PATH + "Product.csv", index=False)
 
 # %%
-for file_name in os.listdir(REPORT_PATH):
-    file_path = os.path.join(REPORT_PATH, file_name)
-    if os.path.isfile(file_path) and file_name.endswith('.csv'):
-        os.remove(file_path)
-
-input("Press Enter to continue..")
-
-# %%
+for file_name in xlsx_files:
+    os.remove(file_name)
